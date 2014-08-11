@@ -17,7 +17,7 @@ BROADCAST_ADDRESS = ('255.255.255.255', LIFX_PORT)
 DISCOVERY_PROTOCOL = 0x5400
 COMMAND_PROTOCOL = 0x3400
 
-SERVICE_UCP = 0x01
+SERVICE_UDP = 0x01
 SERVICE_TCP = 0x02
 
 RESP_GATEWAY = 0x03
@@ -295,6 +295,7 @@ class PacketSender(object):
     def __init__(self):
         self._queue = Queue.Queue()
         self._connected = Event()
+        self._gateway = None
 
     @property
     def is_connected(self):
@@ -320,29 +321,22 @@ class PacketSender(object):
         Process all outgoing packets, until `stop()` is called. Intended to run
         in its own thread.
         """
-        # TODO Automatically reconnect if the socket goes away.
-        tcp_socket = None
-        try:
-            while True:
-                to_send = self._queue.get()
-                if to_send is _SHUTDOWN:
-                    break
+        while True:
+            to_send = self._queue.get()
+            if to_send is _SHUTDOWN:
+                break
 
-                # If we get a gateway object, connect to it. Otherwise, assume
-                # it's a bytestring and send it out on the socket.
-                if isinstance(to_send, Gateway):
-                    if tcp_socket:
-                        tcp_socket.close()
-                    addr = (to_send.addr, to_send.port)
-                    tcp_socket = socket.create_connection(addr)
-                    self._connected.set()
-                else:
-                    if not tcp_socket:
-                        raise SendException('no connection')
-                    tcp_socket.send(to_send)
-        finally:
-            if tcp_socket:
-                tcp_socket.close()
+            # If we get a gateway object, connect to it. Otherwise, assume
+            # it's a bytestring and send it out on the socket.
+            if isinstance(to_send, Gateway):
+                self._gateway = to_send
+                self._connected.set()
+            else:
+                if not self._gateway:
+                    raise SendException('no gateway')
+                dest = (self._gateway.addr, self._gateway.port)
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(to_send, dest)
 
 
 class Logger(object):
@@ -434,7 +428,7 @@ class Lifx(object):
         """
         Records a discovered gateway, for connecting to later.
         """
-        if payload.get('service') == SERVICE_TCP:
+        if payload.get('service') == SERVICE_UDP:
             self.gateway = Gateway(addr[0], payload['port'], header.gateway)
             self.gateway_found_event.set()
 
@@ -498,10 +492,11 @@ class Lifx(object):
         """
         Sets the power state of one or more bulbs.
         """
-        with _blocking(self.lock, self.power_state, self.power_state_event,
+        with _blocking(self.lock, self.power_state, self.light_state_event,
                        timeout):
             self.send(REQ_SET_POWER_STATE,
                       bulb, '2s', '\x00\x01' if is_on else '\x00\x00')
+            self.send(REQ_GET_LIGHT_STATE, ALL_BULBS, '')
         return self.power_state
 
     def set_light_state_raw(self, hue, saturation, brightness, kelvin,
@@ -513,6 +508,7 @@ class Lifx(object):
                        timeout):
             self.send(REQ_SET_LIGHT_STATE, bulb, 'xHHHHI',
                       hue, saturation, brightness, kelvin, 0)
+            self.send(REQ_GET_LIGHT_STATE, ALL_BULBS, '')
         return self.light_state
 
     def set_light_state(self, hue, saturation, brightness, kelvin,
@@ -598,7 +594,7 @@ class Lifx(object):
         Raises a ConnectException if any of the steps fail.
         """
         # Broadcast discovery packets until we find a gateway.
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
         with closing(sock):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
             discover_packet = build_packet(REQ_GATEWAY,
