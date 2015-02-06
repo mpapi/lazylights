@@ -151,7 +151,7 @@ def _send(bulbs, packet_type, packet_fmt, *packet_args):
     Builds a packet and sends it to each bulb in `bulbs`.
     """
     with _sending_socket() as sock:
-        for builb in bulbs:
+        for bulb in bulbs:
             packet = build_packet(packet_type, bulb.gateway_mac, bulb.mac,
                                   packet_fmt, *packet_args)
             sock.sendto(packet, bulb.addr)
