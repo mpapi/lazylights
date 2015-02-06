@@ -1,7 +1,7 @@
 """
 Unit tests for lazylights.
 """
-from mock import patch, ANY
+from mock import patch
 from nose.tools import eq_
 
 import lazylights
