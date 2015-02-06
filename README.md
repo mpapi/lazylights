@@ -2,6 +2,13 @@
 
 Lazylights is a Python API for controlling Lifx bulbs.
 
+
+# Requirements
+
+* Python 2
+* One or more Lifx bulbs, updated to the 2.0 firmware
+
+
 # Quick start
 
 To install,
@@ -13,34 +20,63 @@ pip install git+https://github.com/mpapi/lazylights
 Then, in Python,
 
 ```python
-from lazylights import Lifx
+import lazylights
 import time
 
-lifx = Lifx(num_bulbs=2)  # so it knows how many to wait for when connecting
+bulbs = lazylights.find_bulbs(expected_bulbs=2)
 
-@lifx.on_connected
-def _connected():
-    print "Connected!"
-
-with lifx.run():
-    lifx.set_power_state(True)
-    time.sleep(1)
-    lifx.set_power_state(False)
+lazylights.set_power(bulbs, True)
+time.sleep(1)
+lazylights.set_power(bulbs, False)
 ```
-
-
-# Features
-
-* connection management
-* high- and low-level interfaces for sending and receiving data
-* callback-based, non-blocking, and blocking APIs
-* no dependencies other than Python
 
 
 # Documentation
 
-Not much here yet, sadly, but the code is fairly well-documented. See the
-docstrings, or check out the examples directory.
+Lazylights provides no-dependencies Python module with a minimal API for
+interacting with Lifx bulbs. Before the 2.0 firmware update, discovering and
+controlling bulbs was more complex than it is now, and this module had a lot
+more in it. Now, there are four core functions: 
+
+* `find_bulbs(expected_bulbs=None, timeout=1)`
+
+  This discovers bulbs on your local network. It returns a set of `Bulb`
+  objects once it's found `expected_bulbs` or `timeout` seconds have elapsed
+  (whichever comes first).
+
+
+* `get_state(bulbs, timeout=1)`
+
+  Takes a sequence of `Bulb` objects and returns a list of `State` objects,
+  which you can inspect to find the current parameters for each bulb.
+
+  It returns as soon as it has received state from each of `bulbs` or `timeout`
+  seconds have elapsed (whichever comes first).
+
+* `set_state(bulbs, hue, saturation, brightness, kelvin, fade, raw=False)`
+
+  Takes a sequence of `Bulb` objects and sets their state:
+
+  * `hue` is an integer from 0 to 360, where 0/360 is red
+  * `saturation` is a float from 0 to 1, where 1 is fully saturated; if 0,
+    and `kelvin` is set, uses the whiteness scale instead of colors
+  * `brightness` is a float from 0 to 1, where 1 is brightest
+  * `kelvin` is an integer from 2000 (warmest) to 8000 (coolest)
+  * `fade` is a transition time in milliseconds, where 0 is instant
+  * `raw`, if True, uses raw values for hue, saturation, and brightness --
+    integers from 0 to 65535
+
+* `set_power(bulbs, is_on)`
+
+  Takes a sequence of `Bulb` objects and turns them on or off.
+
+Lazylights does not currently support any kind of remote access through the
+Lifx Cloud, though I have been using an SSH tunnel for this purpose for many
+months, with great success.
+
+There currently are no public higher-level functions, or a command-line
+interface, though it's likely that those will be added over time (especially
+the latter).
 
 
 # Hacking
@@ -49,6 +85,7 @@ docstrings, or check out the examples directory.
 pip install -r dev_requirements.txt
 flake8 *.py && nosetests
 ```
+
 
 # Credits
 
