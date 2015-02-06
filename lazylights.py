@@ -257,8 +257,7 @@ def get_state(bulbs, timeout=1):
     Returns after `timeout` seconds, or responses were obtained from all of
     `bulbs`, whichever happens first.
     """
-    for bulb in bulbs:
-        _send(bulb, REQ_GET_LIGHT_STATE, '')
+    _send(bulbs, REQ_GET_LIGHT_STATE, '')
 
     bulbs = dict((bulb.addr, bulb) for bulb in bulbs)
     states = set()
